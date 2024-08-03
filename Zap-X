@@ -1,0 +1,193 @@
+-- Load the UI Library
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/LeadMarker/Kronos/main/KronosUI.lua"))()
+
+-- Create the Window
+local window = library:Window({
+    Title = "KronosLib - Aimbot & ESP",
+    Accent = Color3.fromRGB(69, 69, 207),
+    Logo = 3610245066,
+    ToggleKey = Enum.KeyCode.LeftAlt
+})
+
+-- Create a Tab
+local tab = window:NewTab({
+    Logo = 4483345998
+})
+
+-- Create a Tab Section
+local tabsection = tab:TabSection({
+    Title = "Main"
+})
+
+-- Create a Column
+local column = tabsection:AddColumn({
+    Title = "Aimbot & ESP"
+})
+
+-- Create a Section for Aimbot Settings
+local aimbotSection = column:Section({
+    Title = "Aimbot Settings"
+})
+
+-- Aimbot Toggle
+aimbotSection:Toggle({
+    Text = "Enable Aimbot",
+    State = true,
+    Callback = function(state)
+        getgenv().AimlockState = state
+    end
+})
+
+-- Aimbot Keybind
+aimbotSection:Keybind({
+    Text = "Toggle Aimbot Key",
+    Key = Enum.KeyCode.E,
+    Callback = function()
+        getgenv().AimlockState = not getgenv().AimlockState
+    end
+})
+
+-- Aimbot Prediction Slider
+aimbotSection:Slider({
+    Text = "Prediction",
+    Min = 0,
+    Max = 1,
+    Def = 0.12345,
+    Callback = function(value)
+        getgenv().Prediction = value
+    end
+})
+
+-- Aimbot FOV Slider
+aimbotSection:Slider({
+    Text = "FOV",
+    Min = 0,
+    Max = 360,
+    Def = 360,
+    Callback = function(value)
+        getgenv().FOV = value
+    end
+})
+
+-- Create a Section for ESP Settings
+local espSection = column:Section({
+    Title = "ESP Settings"
+})
+
+-- ESP Toggle
+espSection:Toggle({
+    Text = "Enable ESP",
+    State = false,
+    Callback = function(state)
+        getgenv().ESP_Enabled = state
+    end
+})
+
+-- Filled ESP Toggle
+espSection:Toggle({
+    Text = "Filled ESP",
+    State = false,
+    Callback = function(state)
+        getgenv().ESP_Filled = state
+    end
+})
+
+-- ESP Refresh Rate Slider
+espSection:Slider({
+    Text = "ESP Refresh Rate",
+    Min = 1,
+    Max = 10,
+    Def = 5,
+    Callback = function(value)
+        getgenv().ESP_RefreshRate = value
+    end
+})
+
+-- Aimbot Logic
+local Players = game:GetService("Players")
+local RS = game:GetService("RunService")
+local WS = game:GetService("Workspace")
+local UIS = game:GetService("UserInputService")
+
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
+local Camera = WS.CurrentCamera
+
+local Locked = false
+local Victim = nil
+
+local function getClosest()
+    local closestPlayer
+    local shortestDistance = math.huge
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character and player.Character:FindFirstChild("Humanoid") then
+            local pos = Camera:WorldToViewportPoint(player.Character.PrimaryPart.Position)
+            local magnitude = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).magnitude
+            if magnitude < shortestDistance and magnitude < getgenv().FOV then
+                closestPlayer = player
+                shortestDistance = magnitude
+            end
+        end
+    end
+    return closestPlayer
+end
+
+Mouse.KeyDown:Connect(function(k)
+    k = k:lower()
+    if k == getgenv().Key:lower() then
+        if getgenv().AimlockState then
+            Locked = not Locked
+            if Locked then
+                Victim = getClosest()
+            else
+                Victim = nil
+            end
+        end
+    end
+end)
+
+RS.RenderStepped:Connect(function()
+    if getgenv().AimlockState and Locked and Victim and Victim.Character then
+        Camera.CFrame = CFrame.new(Camera.CFrame.p, Victim.Character.Head.Position + Victim.Character.Head.Velocity * getgenv().Prediction)
+    end
+end)
+
+-- ESP Logic
+local espObjects = {}
+
+local function createESP(player)
+    local box = Drawing.new("Square")
+    box.Color = Color3.new(1, 0, 0)
+    box.Thickness = 2
+    box.Filled = getgenv().ESP_Filled
+    box.Transparency = 1
+    box.Visible = false
+
+    espObjects[player] = box
+end
+
+local function updateESP()
+    while getgenv().ESP_Enabled do
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LP and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = player.Character.HumanoidRootPart
+                local box = espObjects[player]
+
+                if hrp and box then
+                    local hrpPosition, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                    if onScreen then
+                        box.Size = Vector2.new(2000 / hrpPosition.Z, 3000 / hrpPosition.Z)
+                        box.Position = Vector2.new(hrpPosition.X - box.Size.X / 2, hrpPosition.Y - box.Size.Y / 2)
+                        box.Visible = true
+                    else
+                        box.Visible = false
+                    end
+                end
+            end
+        end
+        wait(getgenv().ESP_RefreshRate)
+    end
+end
+
+spawn(updateESP)
